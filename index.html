@@ -58,6 +58,25 @@ dl div{border-bottom:1px solid var(--line);padding-bottom:10px;min-width:0}
 dt{color:var(--mut);font-size:.85rem}
 dd{margin:2px 0 0;font-weight:500;overflow-wrap:anywhere}
 .note{color:var(--mut);font-size:.85rem;margin-top:26px}
+.adv{border-radius:var(--r);padding:18px 22px;border:2px solid var(--line);background:var(--card)}
+.adv.ok{border-color:var(--ok)}.adv.warn{border-color:var(--warn)}.adv.bad{border-color:var(--bad)}
+.adv b{display:block;font-size:1.2rem;margin-bottom:2px}
+.adv.ok b{color:var(--ok)}.adv.warn b{color:var(--warn)}.adv.bad b{color:var(--bad)}
+.adv p{margin:6px 0 0;color:var(--mut)}
+.adv ul{margin:8px 0 0;padding-left:20px}
+.anat{font:15px/1.7 ui-monospace,Consolas,monospace;background:var(--code);padding:12px 14px;border-radius:10px;overflow-wrap:anywhere}
+.anat mark{background:color-mix(in srgb,var(--bad) 22%,transparent);color:inherit;border-radius:4px;padding:0 2px;border-bottom:2px solid var(--bad)}
+.anat .s{color:var(--mut)}.anat .d{font-weight:800;color:var(--ink)}
+.legend{color:var(--mut);font-size:.88rem;margin:10px 0 14px}
+.fl summary{cursor:pointer;list-style:none}
+.fl summary::-webkit-details-marker{display:none}
+.fl .why{margin:10px 0 0;color:var(--mut);font-size:.93rem}
+.fl .why b{color:var(--ink)}
+.lnk{float:right;background:none;border:0;color:var(--acc);font:inherit;font-size:.9rem;font-weight:700;cursor:pointer}
+.chk{display:flex;flex-wrap:wrap;gap:8px}
+.chk span{font-size:.88rem;padding:4px 12px;border-radius:99px;border:1px solid var(--line);background:var(--bg)}
+.chk .y::before{content:'\2713  ';color:var(--ok);font-weight:700}
+.chk .n::before{content:'\2715  ';color:var(--warn);font-weight:700}
 </style>
 </head>
 <body>
@@ -213,11 +232,50 @@ if(!j.contents)throw new Error('PAGE');
 return{html:j.contents,final:j.status?.url||u,code:j.status?.http_code};
 }
 
-function render(findings,info){
+const WHY={
+'Address':'The address is the first thing attackers disguise. Long, unencrypted, shortened or look-alike addresses make it hard to see which site you will really reach.',
+'Keywords':'Words like login, verify or secure are added to make a fake page feel official. Real sites rarely need them in the address.',
+'Brand':'Attackers put a famous brand name inside a different domain. Only the domain just before the first single slash decides who owns the site.',
+'Form':'Forms decide where your typed data goes. Sending it to another domain or over plain HTTP is how passwords and card numbers get stolen.',
+'Hidden frame':'Invisible frames can load other pages or run tracking and attacks without you noticing.',
+'Frame':'Embedding another domain is not always bad, but attackers use it to overlay fake content on a page.',
+'Redirect':'Automatic redirects can send you from a harmless-looking link to a different, hidden destination.',
+'Scripts':'Scripts run inside your browser. Scripts from unknown or high-risk domains can steal data or load malware.',
+'Code':'Obfuscated or dynamically built code hides what a page really does. Honest sites sometimes use it, but malware uses it constantly.',
+'Page text':'Urgent or threatening wording pushes you to act before thinking, a standard social-engineering tactic.',
+'Download':'Executable files can install malware as soon as they are opened.',
+'Domain age':'Most phishing domains are registered days before an attack and dropped soon after. Older domains have a longer track record.',
+'DNS':'A domain that does not resolve, or fails lookups, is often a dead or throwaway site.'
+};
+
+function advice(score,list,ran){
+const strong=list.filter(f=>f.pts>=25).length;
+let cls='ok',title='No major warning signs',sum='Nothing serious was found, so opening it should be reasonably safe. Keep normal care and never enter passwords unless the address is the exact site you expect.';
+if(score>=60||strong>=2){cls='bad';title='Do not open this link';sum='Several serious warning signs point to phishing or malware. Do not click it, do not enter any data, and delete the message it came from.'}
+else if(score>=30||strong>=1){cls='warn';title='Open only if you fully trust the sender';sum='Some warning signs were found. Confirm with the sender through another channel, or type the official address yourself instead of clicking.'}
+const top=list.slice(0,3).map(f=>'<li>'+esc(f.msg)+'</li>').join('');
+const note=ran.page?'':'<p>The page code could not be checked, so this advice covers only the address and domain.</p>';
+return{cls,html:'<b>'+title+'</b><p>'+sum+'</p>'+(top?'<ul>'+top+'</ul>':'')+note};
+}
+
+function anatomy(u,reg){
+const h=u.hostname.toLowerCase(),sub=h.slice(0,Math.max(0,h.length-reg.length-1));
+const w=[...SUS,...Object.keys(BRANDS).filter(k=>BRANDS[k]!==reg)];
+const re=new RegExp('('+w.join('|')+')','gi');
+const mk=t=>t.split(re).map((p,i)=>i%2?'<mark>'+esc(p)+'</mark>':esc(p)).join('');
+const sch=u.protocol==='https:'?esc('https://'):'<mark>'+esc(u.protocol+'//')+'</mark>';
+return'<div class="anat"><span class="s">'+sch+(sub?mk(sub)+'.':'')+'</span><span class="d">'+mk(reg)+'</span><span class="s">'+esc(u.port?':'+u.port:'')+mk(u.pathname+u.search+u.hash)+'</span></div><p class="legend">The bold part is the domain, which decides who owns the site. Highlighted parts triggered a warning.</p>';
+}
+
+function render(findings,info,u,ran,score){
 const sorted=[...findings].sort((a,b)=>b.pts-a.pts);
-const fl=sorted.length?'<ul class="fl">'+sorted.map(f=>'<li class="'+(f.pts>=25?'bad':f.pts>=12?'warn':'low')+'"><div class="fh"><span class="tag">'+esc(f.cat)+'</span><span>'+esc(f.msg)+'</span><span class="pts">+'+f.pts+'</span></div>'+(f.ev?'<code>'+esc(f.ev)+'</code>':'')+'</li>').join('')+'</ul>':'<p class="empty">No warning signs were found in the parts we could check.</p>';
+const ad=advice(score,sorted,ran);
+const fl=sorted.length?'<ul class="fl">'+sorted.map(f=>'<li class="'+(f.pts>=25?'bad':f.pts>=12?'warn':'low')+'"><details><summary class="fh"><span class="tag">'+esc(f.cat)+'</span><span>'+esc(f.msg)+'</span><span class="pts">+'+f.pts+'</span></summary><p class="why"><b>Why it matters: </b>'+esc(WHY[f.cat]||'This pattern is commonly seen on malicious pages.')+'</p>'+(f.ev?'<code>'+esc(f.ev)+'</code>':'')+'</details></li>').join('')+'</ul>':'<p class="empty">No warning signs were found in the parts we could check.</p>';
+const checks=[['Address rules',ran.addr],['DNS lookup',ran.dns],['Domain registry',ran.who],['Hosting and IP',ran.ip],['Page code',ran.page]];
 const rows=[['Host',info.host],['Registered domain',info.reg],['Registrar',info.registrar],['Registered on',fmtDate(info.created)],['Domain age',info.age!=null?(info.age<365?info.age+' days':(info.age/365).toFixed(1)+' years'):''],['Expires on',fmtDate(info.expires)],['Last updated',fmtDate(info.updated)],['Name servers',(info.ns||[]).join(', ')],['IP addresses',(info.ips||[]).join(', ')],['Hosting provider',info.org],['Network (ASN)',info.asn?'AS'+info.asn:''],['Server location',[info.city,info.region,info.country].filter(Boolean).join(', ')],['Page title',info.title],['Final address',info.final],['HTTP status',info.code]].filter(r=>r[1]);
-$('#out').innerHTML='<section class="panel"><h2>Why this score</h2>'+fl+'</section><section class="panel"><h2>Domain, host and IP details</h2><dl>'+rows.map(r=>'<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd></div>').join('')+'</dl></section>';
+$('#out').innerHTML='<section class="adv '+ad.cls+'">'+ad.html+'</section>'+(u&&info.reg?'<section class="panel"><h2>Link breakdown</h2>'+anatomy(u,info.reg)+'</section>':'')+'<section class="panel"><h2>Why this score <button type="button" class="lnk" id="tg">Expand all</button></h2><p class="legend">Each warning adds points. 30 or more is suspicious, 60 or more is high risk. Select a warning to see why it matters.</p>'+fl+'</section><section class="panel"><h2>What was checked</h2><div class="chk">'+checks.map(c=>'<span class="'+(c[1]?'y':'n')+'">'+c[0]+'</span>').join('')+'</div></section><section class="panel"><h2>Domain, host and IP details</h2><dl>'+rows.map(r=>'<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd></div>').join('')+'</dl></section>';
+const tg=$('#tg');
+if(tg)tg.onclick=()=>{const d=[...document.querySelectorAll('.fl details')];const open=!d.every(x=>x.open);d.forEach(x=>x.open=open);tg.textContent=open?'Collapse all':'Expand all'};
 }
 
 $('#f').addEventListener('submit',async e=>{
@@ -235,14 +293,14 @@ try{u=new URL(raw)}catch{st.className='err';st.textContent='That does not look l
 if(!/^https?:$/.test(u.protocol)){st.className='err';st.textContent='Only http and https links can be checked.';return}
 }
 go.disabled=true;
-const findings=[],info={};
+const findings=[],info={},ran={};
 const add=(pts,cat,msg,ev='')=>findings.push({pts,cat,msg,ev:String(ev||'').slice(0,240)});
 let final=u?u.href:'';
 try{
 if(u){
 st.textContent='Checking the address...';
 info.host=u.hostname.toLowerCase();
-info.reg=checkUrl(u,add);
+info.reg=checkUrl(u,add);ran.addr=true;
 st.textContent='Looking up DNS, ownership and the page...';
 const ip=isIp(info.host);
 const [a,ns,who,page]=await Promise.allSettled([
@@ -251,6 +309,7 @@ ip?Promise.resolve([]):dnsq(info.reg,'NS',2),
 ip||mode==='html'?Promise.reject():rdap(info.reg),
 mode==='html'?Promise.reject():getPage(u.href)
 ]);
+ran.dns=a.status==='fulfilled'&&a.value.length>0;ran.who=who.status==='fulfilled';
 if(a.status==='fulfilled'){info.ips=a.value;if(!a.value.length&&!ip)add(15,'DNS','Domain does not resolve to any IP address, it may be dead or fake')}
 else if(!ip)add(5,'DNS','DNS lookup failed');
 if(ns.status==='fulfilled'&&ns.value.length)info.ns=ns.value;
@@ -260,22 +319,22 @@ if(w.created){info.age=Math.floor((Date.now()-new Date(w.created))/864e5);
 if(info.age<30)add(25,'Domain age','Domain was registered only '+info.age+' days ago',fmtDate(w.created));
 else if(info.age<180)add(10,'Domain age','Domain is less than 6 months old ('+info.age+' days)',fmtDate(w.created));}
 }
-if(info.ips&&info.ips[0]){try{Object.assign(info,await ipinfo(info.ips[0]))}catch{}}
+if(info.ips&&info.ips[0]){try{Object.assign(info,await ipinfo(info.ips[0]));ran.ip=true}catch{}}
 if(mode==='url'){
 if(page.status==='fulfilled'){
 info.final=page.value.final;info.code=page.value.code;final=page.value.final;
 if(regDomain(new URL(final).hostname)!==info.reg)add(15,'Redirect','The link redirects to a different domain',final);
-checkPage(page.value.html,final,add,info);
+checkPage(page.value.html,final,add,info);ran.page=true;
 }else{
 st.textContent='The page itself could not be fetched. Showing address and domain checks only. Use "Paste page source" to analyze the code.';
 }
 }
 }
-if(mode==='html'){checkPage(src,u?u.href:'',add,info)}
+if(mode==='html'){checkPage(src,u?u.href:'',add,info);ran.page=true}
 const score=Math.min(100,findings.reduce((s,f)=>s+f.pts,0));
 const v=score>=60?['High risk','Likely phishing or malicious. Do not enter any data.']:score>=30?['Suspicious','Several warning signs. Be very careful.']:['Low risk','Few warning signs, but nothing is ever guaranteed safe.'];
 setDial(score,v[0],v[1]);
-render(findings,info);
+render(findings,info,u,ran,score);
 if(!st.textContent.startsWith('The page'))st.textContent='Scan complete.';
 }catch(err){
 st.className='err';st.textContent='Something went wrong during the scan. Check your connection and try again.';
