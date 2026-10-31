@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LinkLens - Phishing and Malware Link Checker</title>
+<meta name="description" content="Check any link for phishing signs, suspicious code, domain age, hosting provider and IP details. Runs entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f4f9;--card:#fff;--ink:#121a33;--mut:#5a6685;--line:#dde2ee;--acc:#3a56e8;--ok:#0e9f74;--warn:#d98200;--bad:#d3263c;--code:#eef1f8;--r:14px}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1324;--card:#151d35;--ink:#e9edf9;--mut:#9aa6c6;--line:#27324f;--acc:#8a9cff;--ok:#2fd0a0;--warn:#f0b03a;--bad:#ff6679;--code:#0f1730}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 'Schibsted Grotesk',system-ui,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:44px 20px 70px}
+h1{font-size:clamp(2.2rem,6vw,3.4rem);letter-spacing:-.035em;line-height:1;margin:0 0 10px;font-weight:800}
+h2{font-size:1.15rem;margin:0 0 14px;letter-spacing:-.01em}
+.sub{color:var(--mut);margin:0 0 30px;max-width:54ch;font-size:1.05rem}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+.top{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:stretch}
+@media(max-width:760px){.top{grid-template-columns:1fr}}
+.tabs{display:flex;gap:4px;background:var(--bg);padding:4px;border-radius:10px;margin-bottom:18px;width:max-content;max-width:100%}
+.tabs button{border:0;background:none;color:var(--mut);font:inherit;font-weight:500;padding:8px 14px;border-radius:7px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(20,30,70,.15)}
+label{display:block;font-weight:700;font-size:.92rem;margin:0 0 6px}
+input,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+textarea{font:13px/1.45 ui-monospace,Consolas,monospace;resize:vertical}
+input:focus,textarea:focus,button:focus-visible{outline:3px solid color-mix(in srgb,var(--acc) 45%,transparent);outline-offset:1px;border-color:var(--acc)}
+.go{background:var(--acc);color:#fff;border:0;border-radius:10px;font:inherit;font-weight:700;padding:12px 26px;cursor:pointer;transition:transform .15s}
+.go:active{transform:scale(.97)}
+.go:disabled{opacity:.6;cursor:progress}
+@media(prefers-color-scheme:dark){.go{color:#0d1324}}
+#st{margin:12px 0 0;color:var(--mut);font-size:.92rem;min-height:1.4em}
+#st.err{color:var(--bad);font-weight:500}
+.dial{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.dial svg{width:190px;height:190px}
+.dial circle{fill:none;stroke-width:12;stroke-linecap:round}
+.trk{stroke:var(--line)}
+.arc{stroke:var(--mut);stroke-dasharray:339.3;stroke-dashoffset:339.3;transform:rotate(-90deg);transform-origin:60px 60px;transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1),stroke .4s}
+.dial.ok .arc{stroke:var(--ok)}.dial.warn .arc{stroke:var(--warn)}.dial.bad .arc{stroke:var(--bad)}
+.num{font-size:34px;font-weight:800;fill:var(--ink);letter-spacing:-.03em}
+.of{font-size:9px;fill:var(--mut)}
+.verdict{font-weight:800;font-size:1.2rem;margin:8px 0 2px}
+.dial.ok .verdict{color:var(--ok)}.dial.warn .verdict{color:var(--warn)}.dial.bad .verdict{color:var(--bad)}
+.vsub{color:var(--mut);font-size:.9rem;margin:0}
+#out{margin-top:18px;display:grid;gap:18px}
+.fl{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.fl li{border:1px solid var(--line);border-left:5px solid var(--mut);border-radius:10px;padding:12px 14px;background:var(--bg)}
+.fl li.bad{border-left-color:var(--bad)}.fl li.warn{border-left-color:var(--warn)}.fl li.low{border-left-color:var(--acc)}
+.fh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.tag{font-size:.78rem;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--code);color:var(--mut)}
+.pts{margin-left:auto;font-weight:700;color:var(--mut);font-size:.9rem}
+.fl code{display:block;margin-top:8px;background:var(--code);padding:8px 10px;border-radius:7px;font:12.5px/1.45 ui-monospace,Consolas,monospace;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.empty{color:var(--mut);margin:0}
+dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px 24px;margin:0}
+dl div{border-bottom:1px solid var(--line);padding-bottom:10px;min-width:0}
+dt{color:var(--mut);font-size:.85rem}
+dd{margin:2px 0 0;font-weight:500;overflow-wrap:anywhere}
+.note{color:var(--mut);font-size:.85rem;margin-top:26px}
+</style>
+</head>
+<body>
+<main>
+<h1>LinkLens</h1>
+<p class="sub">Paste a link or a page's source code. LinkLens checks the address, the code behind it, and who owns and hosts the domain.</p>
+<section class="top">
+<form class="panel" id="f">
+<div class="tabs" role="tablist">
+<button type="button" role="tab" aria-selected="true" data-m="url">Scan a link</button>
+<button type="button" role="tab" aria-selected="false" data-m="html">Paste page source</button>
+</div>
+<label for="u" id="ul">Link to check</label>
+<input id="u" type="text" inputmode="url" placeholder="https://example.com/login" autocomplete="off" spellcheck="false">
+<div id="sw" hidden>
+<label for="s">Page source (HTML)</label>
+<textarea id="s" rows="7" placeholder="Paste the HTML you want to analyze"></textarea>
+</div>
+<button class="go" id="go">Scan link</button>
+<p id="st" aria-live="polite"></p>
+</form>
+<div class="panel dial" id="dial" aria-live="polite">
+<svg viewBox="0 0 120 120" role="img" aria-label="Risk score">
+<circle class="trk" cx="60" cy="60" r="54"/>
+<circle class="arc" id="arc" cx="60" cy="60" r="54"/>
+<text class="num" x="60" y="66" text-anchor="middle" id="num">--</text>
+<text class="of" x="60" y="82" text-anchor="middle">out of 100</text>
+</svg>
+<p class="verdict" id="vd">Ready to scan</p>
+<p class="vsub" id="vs">Higher scores mean more warning signs.</p>
+</div>
+</section>
+<div id="out"></div>
+<p class="note">Results come from rule-based checks and public lookups (Google Public DNS, RDAP, ipwho.is and the AllOrigins page proxy). No tool can prove a site is safe, so treat a low score as a hint, not a guarantee. Never enter passwords on a link you do not trust.</p>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SUS=['login','signin','verify','verification','secure','security','update','account','confirm','banking','password','wallet','suspend','unlock','recover','billing','invoice','payment','validate','authenticate','prize','winner','claim'];
+const BRANDS={paypal:'paypal.com',google:'google.com',facebook:'facebook.com',microsoft:'microsoft.com',apple:'apple.com',amazon:'amazon.com',netflix:'netflix.com',instagram:'instagram.com',whatsapp:'whatsapp.com',bkash:'bkash.com',nagad:'nagad.com.bd',binance:'binance.com',dhl:'dhl.com',linkedin:'linkedin.com',dropbox:'dropbox.com'};
+const SHORT=['bit.ly','tinyurl.com','t.co','goo.gl','ow.ly','is.gd','buff.ly','cutt.ly','rebrand.ly','shorturl.at'];
+const RISKY=['tk','ml','ga','cf','gq','xyz','top','click','zip','mov','work','support','country','icu','cam','rest'];
+const SECOND=['co','com','org','net','gov','edu','ac'];
+const URGENT=['verify your account','account suspended','confirm your identity','unusual activity','your account will be','update your payment','enter your password','limited time','act now','security alert'];
+const JS_RULES=[
+[/\beval\s*\(/i,'eval() runs dynamically built code, common in obfuscated malware'],
+[/\batob\s*\(/i,'atob() decodes hidden base64 content'],
+[/\bunescape\s*\(/i,'unescape() decodes obfuscated strings'],
+[/String\.fromCharCode/i,'fromCharCode builds hidden strings from character codes'],
+[/document\.write\s*\(/i,'document.write() injects content into the page'],
+[/new\s+Function\s*\(/i,'new Function() executes dynamically built code'],
+[/(\\x[0-9a-f]{2}){8,}/i,'Long hex-encoded string, a sign of obfuscation'],
+[/(window\.location|location\.replace|location\.href)\s*[=(]/i,'Script-based redirect'],
+[/contextmenu[^;]{0,80}(return\s*false|preventDefault)/i,'Right-click is disabled to block inspection'],
+[/\.(exe|scr|bat|vbs|ps1)['"]/i,'References an executable file']
+];
+const regDomain=h=>{const p=h.split('.');if(p.length<=2)return h;const n=p.length;if(p[n-1].length===2&&SECOND.includes(p[n-2]))return p.slice(-3).join('.');return p.slice(-2).join('.')};
+const isIp=h=>/^\d{1,3}(\.\d{1,3}){3}$/.test(h)||h.startsWith('[');
+const fmtDate=d=>d?new Date(d).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}):'';
+let mode='url';
+
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{
+mode=b.dataset.m;
+document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+$('#sw').hidden=mode!=='html';
+$('#ul').textContent=mode==='html'?'Page address (optional)':'Link to check';
+$('#go').textContent=mode==='html'?'Analyze source':'Scan link';
+}));
+
+function setDial(score,verdict,sub){
+const cls=score>=60?'bad':score>=30?'warn':'ok';
+$('#dial').className='panel dial '+cls;
+$('#arc').style.strokeDashoffset=339.3*(1-score/100);
+$('#num').textContent=score;
+$('#vd').textContent=verdict;
+$('#vs').textContent=sub;
+}
+
+function checkUrl(u,add){
+const h=u.hostname.toLowerCase(),reg=regDomain(h),tld=h.split('.').pop(),low=(h+u.pathname+u.search).toLowerCase();
+if(u.protocol!=='https:')add(10,'Address','Connection is not encrypted (HTTP instead of HTTPS)',u.protocol);
+if(isIp(h))add(25,'Address','Link uses a raw IP address instead of a domain name',h);
+if(u.href.split('/')[2].includes('@'))add(25,'Address','Link contains "@", which can hide the real destination',u.href.split('/')[2]);
+if(h.includes('xn--'))add(20,'Address','Punycode domain, often used for look-alike characters',h);
+if(u.href.length>100)add(8,'Address','Unusually long link ('+u.href.length+' characters)');
+const sub=h.slice(0,Math.max(0,h.length-reg.length-1));
+if(sub.split('.').filter(Boolean).length>=3)add(10,'Address','Unusually deep subdomain chain',sub);
+if((h.match(/-/g)||[]).length>=3)add(8,'Address','Many hyphens in the domain name',h);
+if(SHORT.includes(reg))add(15,'Address','URL shortener hides the final destination',reg);
+if(RISKY.includes(tld))add(12,'Address','Domain ending often abused for phishing','.'+tld);
+const hits=SUS.filter(w=>low.includes(w));
+if(hits.length)add(Math.min(hits.length*5,20),'Keywords','Suspicious words found in the link',hits.join(', '));
+for(const b in BRANDS){if(low.includes(b)&&reg!==BRANDS[b]){add(30,'Brand','The name "'+b+'" is used, but the real domain is not '+BRANDS[b],'Actual domain: '+reg);break}}
+return reg;
+}
+
+function checkPage(html,base,add,info){
+const d=new DOMParser().parseFromString(html,'text/html');
+let baseReg='';try{baseReg=regDomain(new URL(base).hostname)}catch{}
+const abs=v=>{try{return new URL(v,base||'https://invalid.local/')}catch{return null}};
+const ext=v=>{const x=abs(v);return !!(x&&baseReg&&/^https?:$/.test(x.protocol)&&regDomain(x.hostname)!==baseReg)};
+info.title=d.title.trim().slice(0,120);
+if(d.querySelector('input[type=password]'))add(15,'Form','The page asks for a password');
+d.querySelectorAll('form[action]').forEach(f=>{
+const a=f.getAttribute('action'),x=abs(a);
+if(ext(a))add(35,'Form','Form sends typed data to a different domain',x.href);
+else if(x&&x.protocol==='http:')add(15,'Form','Form sends data over insecure HTTP',x.href);
+});
+d.querySelectorAll('iframe').forEach(f=>{
+const st=(f.getAttribute('style')||'').replace(/\s/g,'').toLowerCase(),w=f.getAttribute('width'),h=f.getAttribute('height'),src=f.getAttribute('src')||'';
+if(st.includes('display:none')||st.includes('visibility:hidden')||['0','1'].includes(w)||['0','1'].includes(h))add(30,'Hidden frame','Invisible iframe loads other content',src);
+else if(ext(src))add(10,'Frame','Iframe loads content from another domain',src);
+});
+d.querySelectorAll('meta[http-equiv]').forEach(m=>{if(m.getAttribute('http-equiv').toLowerCase()==='refresh')add(10,'Redirect','Page redirects automatically via meta refresh',m.getAttribute('content'))});
+const ss=[...d.querySelectorAll('script[src]')].map(s=>s.getAttribute('src')).filter(ext);
+if(ss.length>8)add(8,'Scripts','Loads many external scripts ('+ss.length+')');
+ss.forEach(s=>{const x=abs(s);if(x&&RISKY.includes(x.hostname.split('.').pop()))add(15,'Scripts','Script loaded from a high-risk domain',s)});
+const js=[...d.querySelectorAll('script:not([src])')].map(s=>s.textContent).join('\n');
+JS_RULES.forEach(([re,msg])=>{const m=re.exec(js);if(m){const i=Math.max(0,m.index-30);add(12,'Code',msg,js.slice(i,m.index+m[0].length+60).replace(/\s+/g,' '))}});
+if(/[A-Za-z0-9+\/=]{400,}/.test(js))add(15,'Code','Very long encoded blob inside a script');
+const text=(d.body?d.body.textContent:'').toLowerCase();
+const urg=URGENT.filter(w=>text.includes(w));
+if(urg.length)add(Math.min(urg.length*8,24),'Page text','Urgent or threatening wording typical of phishing',urg.join(', '));
+d.querySelectorAll('a[href]').forEach(a=>{const h=a.getAttribute('href');if(/\.(exe|scr|bat|vbs|ps1|apk|msi|jar|iso)(\?|$)/i.test(h))add(25,'Download','Link downloads an executable file',h)});
+const t=d.title.toLowerCase();
+for(const b in BRANDS){if(t.includes(b)&&baseReg&&baseReg!==BRANDS[b]){add(25,'Brand','Page title mentions "'+b+'" but the domain is '+baseReg,d.title.trim());break}}
+}
+
+async function dnsq(h,t,code){
+const r=await fetch('https://dns.google/resolve?name='+encodeURIComponent(h)+'&type='+t);
+const j=await r.json();
+return(j.Answer||[]).filter(a=>a.type===code).map(a=>a.data.replace(/\.$/,''));
+}
+async function rdap(d){
+const r=await fetch('https://rdap.org/domain/'+encodeURIComponent(d));
+if(!r.ok)throw new Error('RDAP');
+const j=await r.json();
+const ev=a=>(j.events||[]).find(e=>e.eventAction===a)?.eventDate;
+const rg=(j.entities||[]).find(e=>(e.roles||[]).includes('registrar'));
+const fn=rg?.vcardArray?.[1]?.find(x=>x[0]==='fn')?.[3];
+return{registrar:fn,created:ev('registration'),expires:ev('expiration'),updated:ev('last changed'),ns:(j.nameservers||[]).map(n=>(n.ldhName||'').toLowerCase()),status:j.status||[]};
+}
+async function ipinfo(ip){
+const r=await fetch('https://ipwho.is/'+ip);
+const j=await r.json();
+if(!j.success)throw new Error('IP');
+return{ip,org:j.connection?.org||j.connection?.isp,asn:j.connection?.asn,country:j.country,city:j.city,region:j.region};
+}
+async function getPage(u){
+const r=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(u));
+const j=await r.json();
+if(!j.contents)throw new Error('PAGE');
+return{html:j.contents,final:j.status?.url||u,code:j.status?.http_code};
+}
+
+function render(findings,info){
+const sorted=[...findings].sort((a,b)=>b.pts-a.pts);
+const fl=sorted.length?'<ul class="fl">'+sorted.map(f=>'<li class="'+(f.pts>=25?'bad':f.pts>=12?'warn':'low')+'"><div class="fh"><span class="tag">'+esc(f.cat)+'</span><span>'+esc(f.msg)+'</span><span class="pts">+'+f.pts+'</span></div>'+(f.ev?'<code>'+esc(f.ev)+'</code>':'')+'</li>').join('')+'</ul>':'<p class="empty">No warning signs were found in the parts we could check.</p>';
+const rows=[['Host',info.host],['Registered domain',info.reg],['Registrar',info.registrar],['Registered on',fmtDate(info.created)],['Domain age',info.age!=null?(info.age<365?info.age+' days':(info.age/365).toFixed(1)+' years'):''],['Expires on',fmtDate(info.expires)],['Last updated',fmtDate(info.updated)],['Name servers',(info.ns||[]).join(', ')],['IP addresses',(info.ips||[]).join(', ')],['Hosting provider',info.org],['Network (ASN)',info.asn?'AS'+info.asn:''],['Server location',[info.city,info.region,info.country].filter(Boolean).join(', ')],['Page title',info.title],['Final address',info.final],['HTTP status',info.code]].filter(r=>r[1]);
+$('#out').innerHTML='<section class="panel"><h2>Why this score</h2>'+fl+'</section><section class="panel"><h2>Domain, host and IP details</h2><dl>'+rows.map(r=>'<div><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1])+'</dd></div>').join('')+'</dl></section>';
+}
+
+$('#f').addEventListener('submit',async e=>{
+e.preventDefault();
+const st=$('#st'),go=$('#go');
+st.className='';st.textContent='';
+let raw=$('#u').value.trim();
+const src=$('#s').value;
+if(mode==='url'&&!raw){st.className='err';st.textContent='Enter a link to check.';return}
+if(mode==='html'&&!src.trim()){st.className='err';st.textContent='Paste the page source to analyze.';return}
+let u=null;
+if(raw){
+if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw))raw='http://'+raw;
+try{u=new URL(raw)}catch{st.className='err';st.textContent='That does not look like a valid link.';return}
+if(!/^https?:$/.test(u.protocol)){st.className='err';st.textContent='Only http and https links can be checked.';return}
+}
+go.disabled=true;
+const findings=[],info={};
+const add=(pts,cat,msg,ev='')=>findings.push({pts,cat,msg,ev:String(ev||'').slice(0,240)});
+let final=u?u.href:'';
+try{
+if(u){
+st.textContent='Checking the address...';
+info.host=u.hostname.toLowerCase();
+info.reg=checkUrl(u,add);
+st.textContent='Looking up DNS, ownership and the page...';
+const ip=isIp(info.host);
+const [a,ns,who,page]=await Promise.allSettled([
+ip?Promise.resolve([info.host]):dnsq(info.host,'A',1),
+ip?Promise.resolve([]):dnsq(info.reg,'NS',2),
+ip||mode==='html'?Promise.reject():rdap(info.reg),
+mode==='html'?Promise.reject():getPage(u.href)
+]);
+if(a.status==='fulfilled'){info.ips=a.value;if(!a.value.length&&!ip)add(15,'DNS','Domain does not resolve to any IP address, it may be dead or fake')}
+else if(!ip)add(5,'DNS','DNS lookup failed');
+if(ns.status==='fulfilled'&&ns.value.length)info.ns=ns.value;
+if(who.status==='fulfilled'){
+const w=who.value;Object.assign(info,w);if(w.ns?.length)info.ns=w.ns;
+if(w.created){info.age=Math.floor((Date.now()-new Date(w.created))/864e5);
+if(info.age<30)add(25,'Domain age','Domain was registered only '+info.age+' days ago',fmtDate(w.created));
+else if(info.age<180)add(10,'Domain age','Domain is less than 6 months old ('+info.age+' days)',fmtDate(w.created));}
+}
+if(info.ips&&info.ips[0]){try{Object.assign(info,await ipinfo(info.ips[0]))}catch{}}
+if(mode==='url'){
+if(page.status==='fulfilled'){
+info.final=page.value.final;info.code=page.value.code;final=page.value.final;
+if(regDomain(new URL(final).hostname)!==info.reg)add(15,'Redirect','The link redirects to a different domain',final);
+checkPage(page.value.html,final,add,info);
+}else{
+st.textContent='The page itself could not be fetched. Showing address and domain checks only. Use "Paste page source" to analyze the code.';
+}
+}
+}
+if(mode==='html'){checkPage(src,u?u.href:'',add,info)}
+const score=Math.min(100,findings.reduce((s,f)=>s+f.pts,0));
+const v=score>=60?['High risk','Likely phishing or malicious. Do not enter any data.']:score>=30?['Suspicious','Several warning signs. Be very careful.']:['Low risk','Few warning signs, but nothing is ever guaranteed safe.'];
+setDial(score,v[0],v[1]);
+render(findings,info);
+if(!st.textContent.startsWith('The page'))st.textContent='Scan complete.';
+}catch(err){
+st.className='err';st.textContent='Something went wrong during the scan. Check your connection and try again.';
+}
+go.disabled=false;
+});
+</script>
+</body>
+</html>
